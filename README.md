@@ -1,8 +1,9 @@
 ### Kotlin协程
 > 本质上，协程是轻量级的线程
+
 这就是[Kotlin官方对](https://www.kotlincn.net/docs/reference/coroutines/basics.html)协程的定义。
 
-但是这等于什么都没说，它究竟是什么？从一个Android开发者的眼光来看：可以把它理解为时一个线程调度API——就是一个Kotlin的语言特性，或者说编程思想。Kotlin通过它为我们封装了一套线程Api。（虽然在线程调度是它的主要使用场景，但是事实上远不止如此）。这时，可能你就要反驳了：不对啊，我用了那么多次协程，根本就没有线程啊！不要慌，我们今天就把Android中Kotlin协程的面具给拔下来。看看它到底是个什么东西。
+但是这等于什么都没说，它究竟是什么？从一个Android开发者的眼光来看：可以把它理解为时一个线程调度API——就是一个Kotlin的语言特性，或者说编程思想。Kotlin通过它为我们封装了一套线程Api。（虽然在线程调度是它的主要使用场景，但是事实上远不止如此）。这时，可能你就要反驳了：不对啊，我用了那么多次协程，根本就没有线程啊！不要慌，我们今天就把Android中Kotlin协程的面具给扒下来。看看它到底是个什么东西。
 
 ### 什么是协程
 阅读本小节一定要了解Kotlin高阶函数！！！！
@@ -12,7 +13,7 @@
 * [Kotlin中的高阶函数、内置高阶函数和内联](https://juejin.cn/post/7065982112767148068)
 * [lambda表达式与Kotlin高阶函数](https://juejin.cn/post/6844903910327451662)
 
-或者你干脆把高阶函数或者Lambda表达式，当做是一个匿名内部类的简写。
+或者你干脆把高阶函数或者Lambda表达式，当做是一个匿名内部类，里面的代码块都会放在类里面的一个方法里。
 
 在开始之前，首先回想一下Kotlin协程的使用方法:
 
@@ -191,7 +192,7 @@ public actual fun <T> (suspend () -> T).createCoroutineUnintercepted(
 }
 ```
 
-代码实现如上，需要注意的是，改方法是用`expect`[关键字](https://www.kotlincn.net/docs/reference/keyword-reference.html)修饰的，是平台相关的。上面的代码就是[具体实现](https://sourcegraph.com/github.com/JetBrains/kotlin@master/-/blob/libraries/stdlib/jvm/src/kotlin/coroutines/intrinsics/IntrinsicsJvm.kt)。
+代码实现如上，需要注意的是，该方法是用`expect`[关键字](https://www.kotlincn.net/docs/reference/keyword-reference.html)修饰的，是平台相关的。上面的代码就是[具体实现](https://sourcegraph.com/github.com/JetBrains/kotlin@master/-/blob/libraries/stdlib/jvm/src/kotlin/coroutines/intrinsics/IntrinsicsJvm.kt)。
 
 继续看代码：首先调用了probeCoroutineCreated:
 
@@ -389,7 +390,7 @@ C-------------
 
 看到这里你一定会恍然大悟，就这？这不就是一个接口回调吗？搞这么复杂，那到底是怎么执行异步任务的呢？别着急，马上就开始讲协程的上下文和调度器。但在此之前先总结一下协程是什么：
 
-#### 概括总结协程是什么
+#### 概括总结协程是什么？
 协程没有脱离线程，它也是运行在线程中的；它并不是一个什么新奇的东西，而是一种编程思想。可以狭隘的讲是Kotlin为了解决某个问题而提供的一整套封装好的Api，从上文中的分析就不难发现，它甚至就只是一个接口回调！。而所要解决的问题就是解决并发问题，让并发任务更简单（像使用同步代码一样使用并发）。
 
 
