@@ -2,11 +2,8 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="3f878333-eba5-43e3-927d-e33034f7d885" name="Default Changelist" comment="">
+      <change afterPath="$PROJECT_DIR$/REASME.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/out/production/JavaCoroutineDemo/DemoRun$1.class" beforeDir="false" afterPath="$PROJECT_DIR$/out/production/JavaCoroutineDemo/DemoRun$1.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/out/production/JavaCoroutineDemo/DemoRun$2.class" beforeDir="false" afterPath="$PROJECT_DIR$/out/production/JavaCoroutineDemo/DemoRun$2.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/out/production/JavaCoroutineDemo/DemoRun.class" beforeDir="false" afterPath="$PROJECT_DIR$/out/production/JavaCoroutineDemo/DemoRun.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/DemoRun.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/DemoRun.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
