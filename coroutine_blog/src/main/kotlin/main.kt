@@ -3,7 +3,7 @@ import kotlin.coroutines.*
 fun main() {
     val coroutineContext =
         FirstContext() + EmptyCoroutineContext + SecondContext() + ThirdContext() + FourthContext()
-    val createCoroutine = suspend {
+    /*val createCoroutine = suspend {
         println("A------------")
         "B"
     }.createCoroutine(object : Continuation<String> {
@@ -18,7 +18,9 @@ fun main() {
             context[FourthContext]?.fourth()
         }
     })
-    createCoroutine.resume(Unit)
+    createCoroutine.resume(Unit)*/
+
+    println(coroutineContext)
 }
 
 class FirstContext : AbstractCoroutineContextElement(Key) {
