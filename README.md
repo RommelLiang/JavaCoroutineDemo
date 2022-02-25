@@ -660,7 +660,11 @@ internal class CombinedContext(
 
 CombinedContext类同样实现了CoroutineContext接口，关键代码如上：重写了fold、get和minusKey方法。本质上这些方法和Element类里的在功能没有什么区别，关键的区别在于它里面的循环。而且它持有一个left成员变量。所有的get和minusKey都增加了不断left的遍历。看到这里大家应该就明白了。这是一个链表结构，里面的left就是我们所常用链表里的next。
 
-那么plus方法剩下的代码就好理解了：如果上下文只有一个，那么上下文就是一个`普通`的上下文。但是，如果有两个以上，这些上下文会作为CombinedContext的element存储，并且借助CombinedContext实现一个链表结构。链表采用头插法实现，但是如果存在ContinuationInterceptor类型的上下文，则特殊处理，永远把它放在链表的头部。已：FirstContext() + EmptyCoroutineContext + ContinuationInterceptor() + SecondContext() + ThirdContext() + FourthContext()为例，添加的过程大致如下：
+那么plus方法剩下的代码就好理解了：如果上下文只有一个，那么上下文就是一个`普通`的上下文。但是，如果有两个以上，这些上下文会作为CombinedContext的element存储，并且借助CombinedContext实现一个链表结构。链表采用头插法实现，但是如果存在ContinuationInterceptor类型的上下文，则特殊处理，永远把它放在链表的头部。以
+
+FirstContext() + EmptyCoroutineContext + ContinuationInterceptor() + SecondContext() + ThirdContext() + FourthContext()为例：
+
+添加的过程大致如下：
 
 
 ![image.png](https://github.com/RommelLiang/JavaCoroutineDemo/blob/main/img/651645767219_.pic_hd.jpg?raw=true)
