@@ -663,7 +663,7 @@ CombinedContext类同样实现了CoroutineContext接口，关键代码如上：�
 那么plus方法剩下的代码就好理解了：如果上下文只有一个，那么上下文就是一个`普通`的上下文。但是，如果有两个以上，这些上下文会作为CombinedContext的element存储，并且借助CombinedContext实现一个链表结构。链表采用头插法实现，但是如果存在ContinuationInterceptor类型的上下文，则特殊处理，永远把它放在链表的头部。已：FirstContext() + EmptyCoroutineContext + ContinuationInterceptor() + SecondContext() + ThirdContext() + FourthContext()为例，添加的过程大致如下：
 
 
-![image.png](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/81e13838567043e0b4e30f9acb0740ad~tplv-k3u1fbpfcp-watermark.image?)
+![image.png](https://github.com/RommelLiang/JavaCoroutineDemo/blob/main/img/651645767219_.pic_hd.jpg?raw=true)
 
 其中方框代表CombinedContext。
 
