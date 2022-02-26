@@ -1122,6 +1122,8 @@ Thread-after: ---------main
 
 很神奇啊，怎么就切出去了，注意看doSomething的withContext(Dispatchers.IO)，就是在这里把线程切出去了。suspend本身无法提供任何切换线程的能力，它还要通过withContext去执行切换线程的操作。而这个关键的作用就是告诉当前执行线程，我要切出去，你不要管我。而此时，这个协程就被挂起了，直到这个doSomething执行结束，会再通过协程使用一个Runable继续执行接下来的代码。这也是挂起函数只能在协程或者挂起函数内调用的原因——没有协程它没有把线程切回来这个能力啊！
 
+看到这里就可以发现，suspend其实主要还是起个提示标记作用。主要的工作还是withContext和协程在做。这个关键字更像是提醒使用者这个函数可能造成阻塞，请在挂起函数或者协程里调用。
+
 同时，协程也可以桥接阻塞和非阻塞两个世界，如上：doSomething就是一个会阻塞的函数。它会阻塞住协程体内代码块的执行无法让下面的代码执行，但是下面的Log打印又是在主线程中的，它又不能被阻塞。这时就要协程发挥作用了。
 
 如果你想把协程里看似同步的代码使用异步执行，可以使用async异步代码块：
@@ -1178,8 +1180,111 @@ Thread-after: ---------main
 
 ### 协程的作用域
 
+上面的代码中我们不断的用到了GlobalScope，这个东西。它究竟是个什么东西呢？它就是个协程作用域。而作用域又是什么？
+
+#### 作用域是什么
+> 协程的作用域定义了协程的范围。
+
+通过作用域可以实现对协程的管理。
+
+在Android中，所有具有生命周期的实体中都对协程作用域提供了一等的支持。详情请看官方文档：[将 Kotlin 协程与生命周期感知型组件一起使用](https://developer.android.com/topic/libraries/architecture/coroutines#lifecyclescope)
+
+其实这几个作用域也没什么难以理解的，它们的目的就是将协程的生命周期和协程所依赖的组件关联起来。以便及时的调整协程的状态，避免造成内存泄露。
 
 
+Kotlin对协程作用域的定义很简单：
+
+```
+public interface CoroutineScope {
+    public val coroutineContext: CoroutineContext
+}
+```
+
+就定义了一个接口，里面持有一个待实现的协程上下文变量。这下它的作用就更明显了——**作用域就是用来保存协程上下文，并将其在协程运行流中进行传递，同时，它也可以用来确定上下文的“权利范围”，约束了上下文的作用范围。**
+
+你甚至还可以狭隘的理解它就是为上下文提供了更方便调用，例如上面自定义的上下文：
+
+```
+context[FirstContext]?.first()
+context[SecondContext]?.second()
+context[ThirdContext]?.third()
+context[FourthContext]?.fourth()
+```
+
+你可以理解为作用域就是下面的代码：
+
+```
+class Scop(coroutineContext: CoroutineContext){
+    fun first(){
+        context[FirstContext]?.first()
+    }
+
+    fun second(){
+        context[SecondContext]?.second()
+    }
+
+    fun third(){
+        context[ThirdContext]?.third()
+    }
+
+    fun fourth(){
+        context[FourthContext]?.fourth()
+    }
+         
+}
+```
+
+这样你就无需再通过一次get操作了。
+
+Kotlin为我们提供了很多作用域，我们可以把它们分为以下几类：
+
+GlobalScope就是一个全局作用域，它可用于启动顶级协程，其生命周期贯穿整个App的生命周期。不建议GlobalScope在应用中使用，它的定义如下：
+
+```
+public object GlobalScope : CoroutineScope {
+    override val coroutineContext: CoroutineContext
+        get() = EmptyCoroutineContext
+}
+```
+
+它就持有了一个空上下文实例。
+
+
+lifecycleScope：为每个Lifecycle对象定义了LifecycleScope。在此范围内启动的协程会在Lifecycle被销毁时取消。它的定义也很简单：
+
+```
+public val LifecycleOwner.lifecycleScope: LifecycleCoroutineScope
+    get() = lifecycle.coroutineScope
+    
+public val Lifecycle.coroutineScope: LifecycleCoroutineScope
+    get() {
+        while (true) {
+            val existing = mInternalScopeRef.get() as LifecycleCoroutineScopeImpl?
+            if (existing != null) {
+                return existing
+            }
+            val newScope = LifecycleCoroutineScopeImpl(
+                this,
+                SupervisorJob() + Dispatchers.Main.immediate
+            )
+            if (mInternalScopeRef.compareAndSet(null, newScope)) {
+                newScope.register()
+                return newScope
+            }
+        }
+    }    
+```
+
+ViewModelScope： 为应用中的每个ViewModel定义了ViewModelScope。如果 ViewModel已清除，则在此范围内启动的协程都会自动取消。
+
+这里就不对它们的源码展开详细解读了。有兴趣的可以自己去查看一下。如果你看完这篇文章，弄懂了协程的本质，那么你一定可以很轻松的理解作用域。
+
+### 总结
+协程：协程没有脱离线程，它也是运行在线程中的；它并不是一个什么新奇的东西，而是一种编程思想。可以狭隘的讲是Kotlin为了解决并发问题而提供的一整套封装好的Api，让并发任务更简单（像使用同步代码一样使用并发）。
+
+上下文：可以给我提供一些额外的能力、负责为协程设置名称、协程的启动取消以及协程在哪个线程或哪些线程上执行。它本身是一个链表，采用头插法，新来的元素总是处在头部；对ContinuationInterceptor做了特殊处理，永远处于链表头部。不允许存在两个相同类型的上下文，如果插入相同类型的上下文，则使用新的替换掉老的上下文实例。协程的线程调度就是通过上下文中的调度器实现的，最终实现方式还是借助Handler.
+
+作用域：协程的作用域定义了协程的范围，用来保存协程上下文，并将其在协程运行流中进行传递，同时，它也可以用来确定上下文的“权利范围”，约束了上下文的作用范围。
 
 
 
