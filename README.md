@@ -232,7 +232,7 @@ suspend {
 
 反编译为Java。代码太多了，截个图贴上：
 
-![image.png](https://raw.githubusercontent.com/RommelLiang/JavaCoroutineDemo/main/img/611645678760_.pic_hd.jpg)
+![image.png](https://raw.githubusercontent.com/RommelLiang/JavaCoroutineDemo/main/img/function.jpg)
 
 这里实现了create和invokeSuspend方法。invokeSuspend 方法里就有我们的println代码，很明显，该方法就是执行挂起函数里代码的地方。create方法也很简单，就是创建了个新的var2（Continuation实例）返回了。var2和它所在的实例一样，也是一个SuspendLambda。紧接着就是调用 var2的intercepted方法，根据上文中的继承关系，这个方法的实现在`ContinuationImpl`中：
 
@@ -667,7 +667,7 @@ FirstContext() + EmptyCoroutineContext + ContinuationInterceptor() + SecondConte
 添加的过程大致如下：
 
 
-![image.png](https://github.com/RommelLiang/JavaCoroutineDemo/blob/main/img/651645767219_.pic_hd.jpg?raw=true)
+![image.png](https://raw.githubusercontent.com/RommelLiang/JavaCoroutineDemo/main/img/context.jpg)
 
 其中方框代表CombinedContext。
 
@@ -1184,6 +1184,10 @@ Thread-after: ---------main
 
 #### 作用域是什么
 > 协程的作用域定义了协程的范围。
+
+通过作用域可以实现对协程的管理。
+
+一般的作用域，都是用来描述一个范围的。它既能提供一些额外的能力，同时也能起到一些约束作用。使用协成作用域可以明确协成之间的关系。同时，借助作用域可以管理和控制对协成的取消和异常处理。
 
 通过作用域可以实现对协程的管理。
 
