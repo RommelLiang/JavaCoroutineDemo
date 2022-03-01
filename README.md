@@ -1177,6 +1177,184 @@ Thread-after: ---------main
 
 所以，挂起就是一个：别管我，你干你的，我搞完了就回来。而这就是体现非阻塞的地方。我去别的地方执行任务，你不用管我，继续干你当前的活。我那边搞完了就回来找你。这也是协程能将阻塞代码协程非阻塞的原因。
 
+但是，协程是怎么知道什么时候要挂起，又是什么时候要恢复呢？
+
+```
+fun func() {
+           GlobalScope.launch {
+               println("-----------------------${Thread.currentThread().name}")
+               var amg = aaaaa()
+               println("after：a-----------------------${Thread.currentThread().name}")
+               var bmg = bbbbb()
+               println("after：b-----------------------${Thread.currentThread().name}")
+               var cmg = ccccc()
+               println("s$amg$bmg$cmg-----------${Thread.currentThread().name}")
+           }
+    }
+
+    suspend fun aaaaa() = suspendCoroutine<String> {
+        thread {
+            Thread.sleep(1000)
+            println("aaaaaa-------------${Thread.currentThread().name}")
+            it.resume("abc")
+        }
+    }
+
+   suspend fun bbbbb() = suspendCoroutine<String> {
+        thread {
+            Thread.sleep(1000)
+            println("bbbbb-------------${Thread.currentThread().name}")
+            it.resume("abc")
+        }
+    }
+
+    suspend fun ccccc() = suspendCoroutine<String> {
+        thread {
+            Thread.sleep(1000)
+            println("ccccc-------------${Thread.currentThread().name}")
+            it.resume("abc")
+        }
+    }
+```
+
+查看下面代码，它的输出如下：
+
+```
+-----------------------DefaultDispatcher-worker-1 @coroutine#2
+aaaaaa-------------Thread-2
+after：a-----------------------DefaultDispatcher-worker-1 @coroutine#2
+bbbbb-------------Thread-3
+after：b-----------------------DefaultDispatcher-worker-1 @coroutine#2
+ccccc-------------Thread-4
+sabcabcabc-----------DefaultDispatcher-worker-1 @coroutine#2
+```
+
+协程是如何知道遇到挂起函数就阻塞，挂起函数结束后切换到当前线程继续执行呢？
+
+在上文的上下文小节分析调度器的时候，我们讲过协程最终是通过handler.post的方式通过Runnable切换线程。而这个Runnable.run方法是在Continuation调用resumeWith后执行的。而resume本质上就是调用resumeWith方法。所以，我么可以知道，这些挂起函数，再执行完之后最终都调用了handler.post方法执行Runable将线程切换到协程上下文指定的线程。那么也就是说，上面的有三个挂起函数的协程体至少要执行三次了？那么为什么里面的输出只有一次呢？
+
+让我们继续看一下反编译为Java的代码：
+
+```
+public final void func() {
+      BuildersKt.runBlocking$default((CoroutineContext)null, (Function2)(new Function2((Continuation)null) {
+         Object L$0;
+         Object L$1;
+         int label;
+
+         @Nullable
+         public final Object invokeSuspend(@NotNull Object $result) {
+            String amg;
+            String bmg;
+            String cmg;
+            StringBuilder var11;
+            Object var10000;
+            Thread var10001;
+            label26: {
+               Object var7;
+               Test var12;
+               label25: {
+                  var7 = IntrinsicsKt.getCOROUTINE_SUSPENDED();
+                  switch(this.label) {
+                  case 0:
+                     ResultKt.throwOnFailure($result);
+                     var11 = (new StringBuilder()).append("-----------------------");
+                     var10001 = Thread.currentThread();
+                     Intrinsics.checkNotNullExpressionValue(var10001, "Thread.currentThread()");
+                     amg = var11.append(var10001.getName()).toString();
+                     boolean var8 = false;
+                     System.out.println(amg);
+                     var12 = Test.this;
+                     this.label = 1;
+                     var10000 = var12.aaaaa(this);
+                     if (var10000 == var7) {
+                        return var7;
+                     }
+                     break;
+                  case 1:
+                     ResultKt.throwOnFailure($result);
+                     var10000 = $result;
+                     break;
+                  case 2:
+                     amg = (String)this.L$0;
+                     ResultKt.throwOnFailure($result);
+                     var10000 = $result;
+                     break label25;
+                  case 3:
+                     bmg = (String)this.L$1;
+                     amg = (String)this.L$0;
+                     ResultKt.throwOnFailure($result);
+                     var10000 = $result;
+                     break label26;
+                  default:
+                     throw new IllegalStateException("call to 'resume' before 'invoke' with coroutine");
+                  }
+
+                  amg = (String)var10000;
+                  var11 = (new StringBuilder()).append("after：a-----------------------");
+                  var10001 = Thread.currentThread();
+                  Intrinsics.checkNotNullExpressionValue(var10001, "Thread.currentThread()");
+                  bmg = var11.append(var10001.getName()).toString();
+                  boolean var4 = false;
+                  System.out.println(bmg);
+                  var12 = Test.this;
+                  this.L$0 = amg;
+                  this.label = 2;
+                  var10000 = var12.bbbbb(this);
+                  if (var10000 == var7) {
+                     return var7;
+                  }
+               }
+
+               bmg = (String)var10000;
+               var11 = (new StringBuilder()).append("after：b-----------------------");
+               var10001 = Thread.currentThread();
+               Intrinsics.checkNotNullExpressionValue(var10001, "Thread.currentThread()");
+               cmg = var11.append(var10001.getName()).toString();
+               boolean var5 = false;
+               System.out.println(cmg);
+               var12 = Test.this;
+               this.L$0 = amg;
+               this.L$1 = bmg;
+               this.label = 3;
+               var10000 = var12.ccccc(this);
+               if (var10000 == var7) {
+                  return var7;
+               }
+            }
+
+            cmg = (String)var10000;
+            var11 = (new StringBuilder()).append('s').append(amg).append(bmg).append(cmg).append("-----------");
+            var10001 = Thread.currentThread();
+            Intrinsics.checkNotNullExpressionValue(var10001, "Thread.currentThread()");
+            String var10 = var11.append(var10001.getName()).toString();
+            boolean var6 = false;
+            System.out.println(var10);
+            return Unit.INSTANCE;
+         }
+
+         @NotNull
+         public final Continuation create(@Nullable Object value, @NotNull Continuation completion) {
+            Intrinsics.checkNotNullParameter(completion, "completion");
+            Function2 var3 = new <anonymous constructor>(completion);
+            return var3;
+         }
+
+         public final Object invoke(Object var1, Object var2) {
+            return ((<undefinedtype>)this.create(var1, (Continuation)var2)).invokeSuspend(Unit.INSTANCE);
+         }
+      }), 1, (Object)null);
+   }
+```
+
+我们已经知道invokeSuspend方法就是我们的Runable，它确实会被回调好多次。但是每次执行的逻辑都不同。它里面定义了一个lable，初始值为0，每回调一次就加一。通过switch判断回调的次数，不同的lable对应不同的逻辑。
+
+到这里，谜底就揭晓了。JVM会将协程体代码块变成一个Runable，然后根据挂起函数将协程体里的代码块用switch分割开来，不同的switch用来对应不同的挂起函数执行后的代码逻辑。当一个挂起函数执行结束，切换线程，调用了run方法后，就能在协程指定的线程里执行和它关联的代码逻辑。
+
+概括起来其实很简单：同一个Runable被多个线程调用，根据不同的lable执行不同的代码逻辑。而由于这些线程是按顺序同步执行的，所以它们的回调也是同步且有序的。所以lable可以使用一个int值，根据回调次数判断是哪一个线程的回调。
+
+
+
 
 ### 协程的作用域
 
