@@ -971,50 +971,89 @@ internal abstract class Task(
 }
 ```
 
-
-最终是通过一个Runnable交给并发队列去执行我们的block，也就是DispatchedContinuation。那么只需要找打它的run方法就能找到最终执行的操作时什么了，它在DispatchedTask中：
+然后，会调用`dispatcher.dispatchWithContext(taskToSchedule, this, tailDispatch)`。dispatcher是ExperimentalCoroutineDispatcher的实例，它在创建LimitingDispatcher的时候被赋值：
 
 ```
- public final override fun run() {   
-        val taskContext = this.taskContext
-        var fatalException: Throwable? = null
+internal object DefaultScheduler : ExperimentalCoroutineDispatcher() {
+    val IO: CoroutineDispatcher = LimitingDispatcher(
+        this,
+        systemProp(IO_PARALLELISM_PROPERTY_NAME, 64.coerceAtLeast(AVAILABLE_PROCESSORS)),
+        "Dispatchers.IO",
+        TASK_PROBABLY_BLOCKING
+    )
+}
+```
+
+而dispatchWithContext方法如下：
+
+```
+override val executor: Executor
+        get() = coroutineScheduler
+
+private var coroutineScheduler = createScheduler()
+    
+private fun createScheduler() = CoroutineScheduler(corePoolSize, maxPoolSize, idleWorkerKeepAliveNs, schedulerName)
+
+internal fun dispatchWithContext(block: Runnable, context: TaskContext, tailDispatch: Boolean) {
         try {
-            val delegate = delegate as DispatchedContinuation<T>
-            val continuation = delegate.continuation
-            withContinuationContext(continuation, delegate.countOrElement) {
-                val context = continuation.context
-                val state = takeState() // NOTE: Must take state in any case, even if cancelled
-                val exception = getExceptionalResult(state)
-                /*
-                 * Check whether continuation was originally resumed with an exception.
-                 * If so, it dominates cancellation, otherwise the original exception
-                 * will be silently lost.
-                 */
-                val job = if (exception == null && resumeMode.isCancellableMode) context[Job] else null
-                if (job != null && !job.isActive) {
-                    val cause = job.getCancellationException()
-                    cancelCompletedResult(state, cause)
-                    continuation.resumeWithStackTrace(cause)
-                } else {
-                    if (exception != null) {
-                        continuation.resumeWithException(exception)
-                    } else {
-                        continuation.resume(getSuccessfulResult(state))
-                    }
-                }
-            }
+            coroutineScheduler.dispatch(block, context, tailDispatch)
+        } catch (e: RejectedExecutionException) {
+           ...
+        }
+    }
+```
+
+其中coroutineScheduler是一个CoroutineScheduler的实例，而CoroutineScheduler和ThreadPoolExecutor一样最终继承自Executor，它就是一个线程池。详细的线程池代码就不展开分析了。但是它和ThreadPoolExecutor又一点不同，它不进维持着每个线程都可以访问的公共任务栈。同时，每个线程都有一个任务栈。一个线程不仅可以执行自己任务栈还可以去“偷”其他线程的任务栈里的任务。
+
+而CoroutineScheduler实现了Executor定义的run方法，其调用逻辑如下：
+
+```
+override fun run() = runWorker()
+
+
+private fun runWorker() {
+    //..
+    while (!isTerminated && state != WorkerState.TERMINATED) {
+        val task = findTask(mayHaveLocalTasks)
+        if (task != null) {
+            rescanned = false
+            minDelayUntilStealableTaskNs = 0L
+            xecuteTask(task)
+            continue
+        } else {    
+            mayHaveLocalTasks = false
+        }
+               //...
+    }
+}
+
+
+private fun executeTask(task: Task) {
+        val taskMode = task.mode
+        idleReset(taskMode)
+        beforeTask(taskMode)
+        runSafely(task)
+        afterTask(taskMode)
+}
+
+fun runSafely(task: Task) {
+        try {
+            task.run()
         } catch (e: Throwable) {
-            fatalException = e
+            val thread = Thread.currentThread()
+            thread.uncaughtExceptionHandler.uncaughtException(thread, e)
         } finally {
-            val result = runCatching { taskContext.afterTask() }
-            handleFatalException(fatalException, result.exceptionOrNull())
+            unTrackTask()
         }
 }
 ```
 
-这里面依然有个delegate代理，并最会执行continuation的resume方法了。该方法在上文中协程的启动里已经讲过了。这里就是执行挂起函数代码块的地方了。
+一旦通过` coroutineScheduler.dispatch(block, context, tailDispatch)`调用线程池执行任务后，最终通过线程池的run方法，调用了我们的task，也就是我们的协程体代码块。此时，代码块里的任务就运行在线程池中了。（具体的线程池执行逻辑就不展开了，这里和ThreadPoolExecutor并没有什么本质的区别）
 
-这就是其切换线程的办法办法。而在Dispatchers.Main，线程调度的方式有点不同了，它最终是通过HandlerContext实现的：
+这就是其切换线程的办法办法。
+
+
+而在Dispatchers.Main，线程调度的方式有点不同了，它最终是通过HandlerContext实现的：
 
 ```
 internal class HandlerContext private constructor(
@@ -1089,7 +1128,7 @@ override val immediate: HandlerContext = _immediate ?:
 
 Kotlin协程在Android中有三个调度器：
 
-* Dispatchers.Default：默认的线程池，如果不指定调度器，就是使用它，适合 CPU 密集型任务；
+* Dispatchers.Default：默认的线程池，如果不指定调度器，就是使用它，适合 CPU 密集型任务（如果未设置useCoroutinesScheduler则和IO使用同一线程池，否则使用Executors.newFixedThreadPool创建线程池）；
 * Dispatchers.Main：在主线程中执行；
 * Dispatchers.IO：在Kotlin内部的共享线程池里的线程里执行，适合 IO 任务
 
